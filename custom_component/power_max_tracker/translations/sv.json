@@ -1,0 +1,26 @@
+{
+  "entity": {
+    "sensor": {
+      "bf1_l_min": {
+        "name": "Flow sensor DHW (BF1)"
+      }
+    }
+  },
+  "config": {
+    "title": "Power Max Tracker",
+    "step": {
+      "user": {
+        "data": {
+          "password": "Password",
+          "username": "Username"
+        }
+      },
+      "reconfigure": {
+        "data": {
+          "password": "Password",
+          "username": "Username"
+        }
+      }
+    }
+  }
+}

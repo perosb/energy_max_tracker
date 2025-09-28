@@ -1,0 +1,4 @@
+update_max_values:
+  name: update_max_values
+  description: Update max values from midnight for all Power Max Tracker instances.
+  fields: {}
