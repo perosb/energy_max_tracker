@@ -14,12 +14,12 @@ The **Power Max Tracker** integration for Home Assistant tracks the maximum hour
 
 ## Installation
 1. **Via HACS**:
-   - Add `https://github.com/perosb/power-max-tracker` as a custom repository in HACS.
+   - Add `https://github.com/perosb/power_max_tracker` as a custom repository in HACS.
    - Install the `Power Max Tracker` integration.
    - Restart Home Assistant.
 
 2. **Manual Installation**:
-   - Download the latest release from `https://github.com/perosb/power-max-tracker`.
+   - Download the latest release from `https://github.com/perosb/power_max_tracker`.
    - Extract the `power_max_tracker` folder to `/config/custom_components/`.
    - Restart Home Assistant.
 
