@@ -44,19 +44,6 @@ power_max_tracker:
 - `monthly_reset` (optional, default: `false`): Reset max values to `0` on the 1st of each month.
 - `binary_sensor` (optional): A binary sensor (e.g., `binary_sensor.power_enabled`) to gate updates; only updates when `"on"`.
 
-### Recorder Configuration
-Ensure the source sensor and `SourcePowerSensor` are included in the recorder for statistics:
-```yaml
-recorder:
-  purge_keep_days: 1
-  include:
-    entities:
-      - sensor.power_sensor
-      - sensor.power_max_source_<entry_id>  # Replace with your entry_id
-      - sensor.power_another_source  # If using multiple entries
-```
-Find the `entry_id` in Settings > Devices & Services > Integrations or logs (e.g., `01K6ABFNPK61HBVAN855WBHXBG`).
-
 ## Usage
 - **Entities Created**:
   - `sensor.max_power_<index>_<entry_id>`: Top `num_max_values` hourly average power values in kW (e.g., `sensor.max_power_1_01K6ABFNPK61HBVAN855WBHXBG`).
