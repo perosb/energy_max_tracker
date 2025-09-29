@@ -82,7 +82,6 @@ class SourcePowerSensor(SensorEntity):
                     try:
                         value = float(source_state.state)
                         self._state = max(0.0, value)  # Ignore negative values
-                        _LOGGER.debug(f"Updated {self.entity_id} to {self._state} W")
                     except (ValueError, TypeError):
                         _LOGGER.warning(f"Invalid state for {self._source_sensor}: {source_state.state}")
                         self._state = 0.0
@@ -90,7 +89,6 @@ class SourcePowerSensor(SensorEntity):
                     _LOGGER.debug(f"Source sensor {self._source_sensor} unavailable or unknown")
                     self._state = 0.0
             else:
-                _LOGGER.debug(f"Setting {self.entity_id} to 0 due to binary sensor state")
                 self._state = 0.0
             self.async_write_ha_state()
 
