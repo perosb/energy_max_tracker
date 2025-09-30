@@ -11,5 +11,5 @@
     "documentation": "https://github.com/perosb/power_max_tracker",
     "iot_class": "local_polling",
     "issue_tracker": "https://github.com/perosb/power_max_tracker/issues",
-    "version": "2025.9.1"
+    "version": "2025.9.2"
 }
