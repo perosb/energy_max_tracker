@@ -72,7 +72,7 @@ class PowerMaxCoordinator:
                     self.hass,
                     self._async_reset_monthly,
                     hour=0,
-                    minute=0,
+                    minute=2,
                     second=0,
                 )
             )
