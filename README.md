@@ -5,6 +5,7 @@ The **Power Max Tracker** integration for Home Assistant tracks the maximum hour
 ## Features
 - **Max Power Sensors**: Creates `num_max_values` sensors (e.g., `sensor.max_power_1_<entry_id>`, `sensor.max_power_2_<entry_id>`) showing the top hourly average power values in kW, rounded to 2 decimal places.
 - **Source Power Sensor**: Creates a sensor (e.g., `sensor.power_max_source_<entry_id>`) that tracks the source sensor's state in watts, setting to `0` for negative values or when the binary sensor is off/unavailable.
+- **Current Hourly Energy Sensor**: Creates a sensor (e.g., `sensor.current_hourly_energy_<entry_id>`) that calculates cumulative kWh usage so far in the current hour based on the source sensor's power, gated by the binary sensor.
 - **Hourly Updates**: Updates `max_values` at 1 minute past each hour using hourly average statistics from the source sensor.
 - **Negative Value Filtering**: Ignores negative power values in both the source sensor and max value calculations.
 - **Binary Sensor Gating**: Only updates when the binary sensor (if configured) is `"on"`.
@@ -48,8 +49,12 @@ power_max_tracker:
 - **Entities Created**:
   - `sensor.max_power_<index>_<entry_id>`: Top `num_max_values` hourly average power values in kW (e.g., `sensor.max_power_1_01K6ABFNPK61HBVAN855WBHXBG`).
   - `sensor.power_max_source_<entry_id>`: Tracks the source sensor in watts, `0` if negative or binary sensor is off/unavailable.
+  - `sensor.current_hourly_energy_<entry_id>`: Cumulative kWh usage so far in the current hour.
 - **Service**: Call `power_max_tracker.update_max_values` via Developer Tools > Services to recalculate max values from midnight.
-- **Updates**: Max sensors update at 1 minute past each hour or after calling the service. The source sensor updates in real-time when the binary sensor is `"on"`.
+- **Updates**: Max sensors update at 1 minute past each hour or after calling the service. The source and energy sensors update in real-time when the binary sensor is `"on"`.
+
+## Important Notes
+- **Renaming Source Sensor**: If the `source_sensor` is renamed (e.g., from `sensor.power_sensor` to `sensor.new_power_sensor`), the integration will stop tracking it. Update the configuration with the new entity ID and restart Home Assistant to restore functionality.
 
 ## License
 MIT License. See `LICENSE` file for details.

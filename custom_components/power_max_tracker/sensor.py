@@ -126,9 +126,9 @@ class CurrentHourlyEnergySensor(SensorEntity):
         super().__init__()
         self._coordinator = coordinator
         self._entry = entry
-        self._source_sensor = entry.data[CONF_SOURCE_SENSOR]
+        self._source_sensor_entity_id = f"sensor.power_max_source_{entry.entry_id}"  # Use SourcePowerSensor entity
         self._binary_sensor = entry.data.get(CONF_BINARY_SENSOR)
-        self._attr_name = f"Current Hourly Energy {self._source_sensor.split('.')[-1]}"
+        self._attr_name = f"Current Hourly Energy {entry.data[CONF_SOURCE_SENSOR].split('.')[-1]}"
         self._attr_unique_id = f"{entry.entry_id}_current_hourly_energy"
         self._attr_device_class = SensorDeviceClass.ENERGY
         self._attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
@@ -142,7 +142,7 @@ class CurrentHourlyEnergySensor(SensorEntity):
     async def async_added_to_hass(self):
         """Handle entity added to hass."""
         async def _async_state_changed(event: Event):
-            """Handle state changes of source sensor."""
+            """Handle state changes of SourcePowerSensor."""
             if not self._can_update():
                 self._state = 0.0
                 self._last_state = None
@@ -152,16 +152,13 @@ class CurrentHourlyEnergySensor(SensorEntity):
 
             new_state = event.data.get("new_state")
             if new_state is None or new_state.state in ("unavailable", "unknown"):
-                _LOGGER.debug(f"Source sensor {self._source_sensor} unavailable or unknown")
+                _LOGGER.debug(f"SourcePowerSensor {self._source_sensor_entity_id} unavailable or unknown")
                 self._state = 0.0
                 self._last_state = None
                 self._last_update = None
             else:
                 try:
                     power_watts = float(new_state.state)
-                    if power_watts < 0:
-                        _LOGGER.debug(f"Skipping negative power: {power_watts} W")
-                        power_watts = 0.0
                     current_time = new_state.last_updated
 
                     if self._last_state is not None and self._last_update is not None:
@@ -175,17 +172,17 @@ class CurrentHourlyEnergySensor(SensorEntity):
                     self._last_update = current_time
                     self._state = round(self._state, 2)
                 except (ValueError, TypeError):
-                    _LOGGER.warning(f"Invalid state for {self._source_sensor}: {new_state.state}")
+                    _LOGGER.warning(f"Invalid state for {self._source_sensor_entity_id}: {new_state.state}")
                     self._state = 0.0
                     self._last_state = None
                     self._last_update = None
 
             self.async_write_ha_state()
 
-        # Track state changes of source sensor
+        # Track state changes of SourcePowerSensor
         self.async_on_remove(
             async_track_state_change_event(
-                self.hass, [self._source_sensor], _async_state_changed
+                self.hass, [self._source_sensor_entity_id], _async_state_changed
             )
         )
 
