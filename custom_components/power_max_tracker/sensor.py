@@ -1,11 +1,11 @@
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime
 from homeassistant.components.sensor import SensorEntity, SensorDeviceClass, SensorStateClass
-from homeassistant.const import UnitOfEnergy, UnitOfPower
-from homeassistant.core import HomeAssistant, callback, Event
+from homeassistant.const import UnitOfPower, UnitOfEnergy
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.event import async_track_state_change_event
+from homeassistant.helpers.event import async_track_state_change_event, async_track_time_change
 from .const import DOMAIN, CONF_NUM_MAX_VALUES, CONF_SOURCE_SENSOR, CONF_BINARY_SENSOR
 from .coordinator import PowerMaxCoordinator
 
@@ -26,9 +26,9 @@ async def async_setup_entry(
     # Add SourcePowerSensor
     source_sensor = SourcePowerSensor(coordinator, entry)
     sensors.append(source_sensor)
-    # Add CurrentHourlyEnergySensor
-    energy_sensor = CurrentHourlyEnergySensor(coordinator, entry)
-    sensors.append(energy_sensor)
+    # Add HourlyEnergySensor
+    hourly_energy_sensor = HourlyEnergySensor(coordinator, entry)
+    sensors.append(hourly_energy_sensor)
     async_add_entities(sensors, update_before_add=True)
     for sensor in sensors:
         coordinator.add_entity(sensor)
@@ -118,71 +118,92 @@ class SourcePowerSensor(SensorEntity):
         """Return the state."""
         return self._state
 
-class CurrentHourlyEnergySensor(SensorEntity):
-    """Sensor for average kWh usage so far in the current hour."""
+
+class HourlyEnergySensor(SensorEntity):
+    """Sensor for hourly average kWh so far the current hour."""
 
     def __init__(self, coordinator: PowerMaxCoordinator, entry: ConfigEntry):
         """Initialize."""
         super().__init__()
         self._coordinator = coordinator
         self._entry = entry
-        self._source_sensor_entity_id = f"sensor.power_max_source_{entry.entry_id}"  # Use SourcePowerSensor entity
+        self._source_sensor = entry.data[CONF_SOURCE_SENSOR]
         self._binary_sensor = entry.data.get(CONF_BINARY_SENSOR)
-        self._attr_name = f"Current Hourly Energy {entry.data[CONF_SOURCE_SENSOR].split('.')[-1]}"
-        self._attr_unique_id = f"{entry.entry_id}_current_hourly_energy"
-        self._attr_device_class = SensorDeviceClass.ENERGY
-        self._attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
-        self._attr_state_class = SensorStateClass.TOTAL_INCREASING
-        self._attr_icon = "mdi:lightning-bolt-circle"
-        self._attr_should_poll = False  # Updated via state changes
-        self._state = 0.0
-        self._last_state = None
-        self._last_update = None
+        self._attr_name = f"Hourly Average Power {self._source_sensor.split('.')[-1]}"
+        self._attr_unique_id = f"{entry.entry_id}_hourly_energy"
+        self._attr_device_class = SensorDeviceClass.POWER
+        self._attr_native_unit_of_measurement = UnitOfPower.KILO_WATT
+        self._attr_state_class = SensorStateClass.MEASUREMENT
+        self._attr_icon = "mdi:lightning-bolt"
+        self._attr_should_poll = False
+        self._accumulated_energy = 0.0
+        self._last_power = 0.0
+        self._last_time = None
+        self._hour_start = None
 
     async def async_added_to_hass(self):
         """Handle entity added to hass."""
-        async def _async_state_changed(event: Event):
-            """Handle state changes of SourcePowerSensor."""
-            if not self._can_update():
-                self._state = 0.0
-                self._last_state = None
-                self._last_update = None
-                self.async_write_ha_state()
-                return
-
-            new_state = event.data.get("new_state")
-            if new_state is None or new_state.state in ("unavailable", "unknown"):
-                _LOGGER.debug(f"SourcePowerSensor {self._source_sensor_entity_id} unavailable or unknown")
-                self._state = 0.0
-                self._last_state = None
-                self._last_update = None
-            else:
-                try:
-                    power_watts = float(new_state.state)
-                    current_time = new_state.last_updated
-
-                    if self._last_state is not None and self._last_update is not None:
-                        time_diff_seconds = (current_time - self._last_update).total_seconds()
-                        energy_increment_kwh = (power_watts / 1000.0 + self._last_state / 1000.0) * (time_diff_seconds / 3600.0) / 2.0
-                        self._state += energy_increment_kwh
-                    else:
-                        self._state = 0.0  # Reset at the start of tracking or after unavailability
-
-                    self._last_state = power_watts
-                    self._last_update = current_time
-                    self._state = round(self._state, 2)
-                except (ValueError, TypeError):
-                    _LOGGER.warning(f"Invalid state for {self._source_sensor_entity_id}: {new_state.state}")
-                    self._state = 0.0
-                    self._last_state = None
-                    self._last_update = None
-
+        async def _async_hour_start(now):
+            """Reset at the start of each hour."""
+            self._accumulated_energy = 0.0
+            self._last_power = 0.0
+            self._last_time = now
+            self._hour_start = now
             self.async_write_ha_state()
 
-        # Track state changes of SourcePowerSensor
+        # Track hour changes
+        self.async_on_remove(
+            async_track_time_change(
+                self.hass,
+                _async_hour_start,
+                hour=None,
+                minute=0,
+                second=0,
+            )
+        )
+
+        # Initialize
+        await _async_hour_start(datetime.now())
+
+        async def _async_state_changed(event):
+            """Handle state changes of source or binary sensor."""
+            now = datetime.now()
+            if self._last_time is None:
+                self._last_time = now
+                return
+            if self._can_update():
+                source_state = self.hass.states.get(self._source_sensor)
+                if source_state is not None and source_state.state not in ("unavailable", "unknown"):
+                    try:
+                        current_power = float(source_state.state)
+                        if current_power < 0:
+                            current_power = 0.0
+                        delta_seconds = (now - self._last_time).total_seconds()
+                        if delta_seconds > 0:
+                            # Average power in W
+                            avg_power = (self._last_power + current_power) / 2
+                            # Energy in kWh
+                            delta_energy = avg_power * delta_seconds / 3600000
+                            self._accumulated_energy += delta_energy
+                        self._last_power = current_power
+                        self._last_time = now
+                    except (ValueError, TypeError):
+                        _LOGGER.warning(f"Invalid state for {self._source_sensor}: {source_state.state}")
+                        self._last_power = 0.0
+                else:
+                    _LOGGER.debug(f"Source sensor {self._source_sensor} unavailable or unknown")
+                    self._last_power = 0.0
+            else:
+                self._last_power = 0.0
+            self.async_write_ha_state()
+
+        # Track state changes of source and binary sensors
+        sensors = [self._source_sensor]
+        if self._binary_sensor:
+            sensors.append(self._binary_sensor)
         self.async_on_remove(
             async_track_state_change_event(
-                self.hass, [self._source_sensor_entity_id], _async_state_changed
+                self.hass, sensors, _async_state_changed
             )
         )
 
@@ -196,8 +217,10 @@ class CurrentHourlyEnergySensor(SensorEntity):
     @property
     def native_value(self):
         """Return the state."""
-        return self._state
-
-    async def async_will_remove_from_hass(self):
-        """Handle entity removed from hass."""
-        pass  # No listeners to clean up since using state change event
+        if self._hour_start is None:
+            return 0.0
+        now = datetime.now()
+        elapsed_hours = (now - self._hour_start).total_seconds() / 3600
+        if elapsed_hours > 0:
+            return round(self._accumulated_energy / elapsed_hours, 3)
+        return 0.0

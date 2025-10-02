@@ -34,6 +34,7 @@ class PowerMaxCoordinator:
             hasattr(entity, 'async_write_ha_state') and
             callable(getattr(entity, 'async_write_ha_state', None)) and
             (entity._attr_unique_id.endswith("_source") or
+             entity._attr_unique_id.endswith("_hourly_energy") or
              any(entity._attr_unique_id.endswith(f"_max_values_{i+1}") for i in range(self.num_max_values)))):
             self.entities.append(entity)
             _LOGGER.debug(f"Added entity {entity.entity_id} with unique_id {entity._attr_unique_id}")
@@ -51,8 +52,6 @@ class PowerMaxCoordinator:
         # Clean invalid entities
         self.entities = [e for e in self.entities if self._is_valid_entity(e)]
         _LOGGER.debug(f"After setup cleanup, {len(self.entities)} valid entities for {self.source_sensor}")
-        if not self.source_sensor_entity_id:
-            _LOGGER.error(f"No SourcePowerSensor entity found for {self.source_sensor}")
 
         # Hourly update listener (for max values)
         self._listeners.append(
@@ -85,12 +84,13 @@ class PowerMaxCoordinator:
                 hasattr(entity, 'async_write_ha_state') and
                 callable(getattr(entity, 'async_write_ha_state', None)) and
                 (entity._attr_unique_id.endswith("_source") or
+                 entity._attr_unique_id.endswith("_hourly_energy") or
                  any(entity._attr_unique_id.endswith(f"_max_values_{i+1}") for i in range(self.num_max_values))))
 
     async def _async_update_hourly(self, now):
         """Calculate hourly average power in kW and update max values if binary sensor allows."""
         if not self.source_sensor_entity_id:
-            _LOGGER.error(f"Cannot update hourly stats: source_sensor_entity_id not set for {self.source_sensor}")
+            _LOGGER.debug(f"Cannot update hourly stats: source_sensor_entity_id not set for {self.source_sensor}")
             return
 
         end_time = now.replace(minute=0, second=0, microsecond=0)
@@ -136,7 +136,7 @@ class PowerMaxCoordinator:
     async def async_update_max_values_from_midnight(self):
         """Update max values from midnight to the current hour."""
         if not self.source_sensor_entity_id:
-            _LOGGER.error(f"Cannot update max values: source_sensor_entity_id not set for {self.source_sensor}")
+            _LOGGER.debug(f"Cannot update max values: source_sensor_entity_id not set for {self.source_sensor}")
             return
 
         now = datetime.now()
