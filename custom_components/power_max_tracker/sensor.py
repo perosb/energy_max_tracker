@@ -1,11 +1,12 @@
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 from homeassistant.components.sensor import SensorEntity, SensorDeviceClass, SensorStateClass
 from homeassistant.const import UnitOfPower, UnitOfEnergy
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.event import async_track_state_change_event, async_track_time_change
+from homeassistant.helpers.event import async_track_state_change_event, async_track_time_change, async_track_time_interval
+from homeassistant.util import dt as dt_util
 from .const import DOMAIN, CONF_NUM_MAX_VALUES, CONF_SOURCE_SENSOR, CONF_BINARY_SENSOR
 from .coordinator import PowerMaxCoordinator
 
@@ -23,6 +24,9 @@ async def async_setup_entry(
         MaxPowerSensor(coordinator, idx, f"Max Hourly Average Power {idx + 1}")
         for idx in range(num_max_values)
     ]
+    # Add average max power sensor
+    average_max_sensor = AverageMaxPowerSensor(coordinator, entry)
+    sensors.append(average_max_sensor)
     # Add SourcePowerSensor
     source_sensor = SourcePowerSensor(coordinator, entry)
     sensors.append(source_sensor)
@@ -56,6 +60,31 @@ class MaxPowerSensor(SensorEntity):
         """Return the state."""
         max_values = self._coordinator.max_values
         return round(max_values[self._index], 2) if len(max_values) > self._index else 0.0
+
+class AverageMaxPowerSensor(SensorEntity):
+    """Sensor for the average of all max hourly average power values."""
+
+    def __init__(self, coordinator: PowerMaxCoordinator, entry: ConfigEntry):
+        """Initialize."""
+        super().__init__()
+        self._coordinator = coordinator
+        self._entry = entry
+        self._attr_name = "Average Max Hourly Average Power"
+        self._attr_unique_id = f"{entry.entry_id}_average_max"
+        self._attr_device_class = SensorDeviceClass.POWER
+        self._attr_native_unit_of_measurement = UnitOfPower.KILO_WATT
+        self._attr_state_class = SensorStateClass.MEASUREMENT
+        self._attr_icon = "mdi:chart-line"
+        self._attr_should_poll = False  # Updated via coordinator
+        self._attr_force_update = True  # Force state updates
+
+    @property
+    def native_value(self):
+        """Return the state."""
+        max_values = self._coordinator.max_values
+        if max_values:
+            return round(sum(max_values) / len(max_values), 2)
+        return 0.0
 
 class SourcePowerSensor(SensorEntity):
     """Sensor that tracks the source sensor state, gated by binary sensor."""
@@ -163,11 +192,11 @@ class HourlyEnergySensor(SensorEntity):
         )
 
         # Initialize
-        await _async_hour_start(datetime.now())
+        await _async_hour_start(dt_util.utcnow())
 
         async def _async_state_changed(event):
             """Handle state changes of source or binary sensor."""
-            now = datetime.now()
+            now = dt_util.utcnow()
             if self._last_time is None:
                 self._last_time = now
                 return
@@ -219,7 +248,7 @@ class HourlyEnergySensor(SensorEntity):
         """Return the state."""
         if self._hour_start is None:
             return 0.0
-        now = datetime.now()
+        now = dt_util.utcnow()
         elapsed_hours = (now - self._hour_start).total_seconds() / 3600
         if elapsed_hours > 0:
             return round(self._accumulated_energy / elapsed_hours, 3)
