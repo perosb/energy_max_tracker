@@ -46,6 +46,31 @@ power_max_tracker:
 - `monthly_reset` (optional, default: `false`): Reset max values to `0` on the 1st of each month.
 - `binary_sensor` (optional): A binary sensor (e.g., `binary_sensor.power_enabled`) to gate updates; only updates when `"on"`.
 
+### Example Binary Sensor Template
+If you want to gate the power tracking based on time (e.g., only during high peak hours in certain months), create a template binary sensor in your `configuration.yaml` and reference it in the `binary_sensor` option. Here's an example that activates during weekdays (Mon-Fri) from 7 AM to 8 PM in the months of November through March:
+
+```yaml
+template:
+  - binary_sensor:
+      - name: "Power Tracking Gate"
+        state: >
+          {% set current_month = now().month %}
+          {% set current_day = now().weekday() %}
+          {% set current_hour = now().hour %}
+          {% if current_month in [11, 12, 1, 2, 3] and current_day in [0, 1, 2, 3, 4] and current_hour >= 7 and current_hour < 20 %}
+            True
+          {% else %}
+            False
+          {% endif %}
+```
+
+Then, configure the integration to use this sensor:
+```yaml
+power_max_tracker:
+  - source_sensor: sensor.power_sensor
+    binary_sensor: binary_sensor.power_tracking_gate
+```
+
 ## Usage
 - **Entities Created**:
   - `sensor.max_hourly_average_power_<index>_<entry_id>`: Top `num_max_values` hourly average power values in kW (e.g., `sensor.max_hourly_average_power_1_01K6ABFNPK61HBVAN855WBHXBG`).
