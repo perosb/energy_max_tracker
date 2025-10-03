@@ -1,16 +1,31 @@
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime
 from homeassistant.components.sensor import SensorEntity, SensorDeviceClass, SensorStateClass
-from homeassistant.const import UnitOfPower, UnitOfEnergy
-from homeassistant.core import HomeAssistant, callback
+from homeassistant.const import UnitOfPower
+from homeassistant.core import HomeAssistant
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.event import async_track_state_change_event, async_track_time_change, async_track_time_interval
+from homeassistant.helpers.event import async_track_state_change_event, async_track_time_change
 from homeassistant.util import dt as dt_util
 from .const import DOMAIN, CONF_NUM_MAX_VALUES, CONF_SOURCE_SENSOR, CONF_BINARY_SENSOR
 from .coordinator import PowerMaxCoordinator
 
 _LOGGER = logging.getLogger(__name__)
+
+class GatedSensorEntity(SensorEntity):
+    """Base class for sensors gated by a binary sensor."""
+
+    def __init__(self, entry: ConfigEntry):
+        """Initialize."""
+        super().__init__()
+        self._binary_sensor = entry.data.get(CONF_BINARY_SENSOR)
+
+    def _can_update(self):
+        """Check if the sensor can update based on binary sensor state."""
+        if not self._binary_sensor:
+            return True
+        state = self.hass.states.get(self._binary_sensor)
+        return state is not None and state.state == "on"
 
 async def async_setup_entry(
     hass: HomeAssistant,
@@ -30,9 +45,9 @@ async def async_setup_entry(
     # Add SourcePowerSensor
     source_sensor = SourcePowerSensor(coordinator, entry)
     sensors.append(source_sensor)
-    # Add HourlyEnergySensor
-    hourly_energy_sensor = HourlyEnergySensor(coordinator, entry)
-    sensors.append(hourly_energy_sensor)
+    # Add HourlyAveragePowerSensor
+    hourly_average_power_sensor = HourlyAveragePowerSensor(coordinator, entry)
+    sensors.append(hourly_average_power_sensor)
     async_add_entities(sensors, update_before_add=True)
     for sensor in sensors:
         coordinator.add_entity(sensor)
@@ -86,16 +101,15 @@ class AverageMaxPowerSensor(SensorEntity):
             return round(sum(max_values) / len(max_values), 2)
         return 0.0
 
-class SourcePowerSensor(SensorEntity):
+class SourcePowerSensor(GatedSensorEntity):
     """Sensor that tracks the source sensor state, gated by binary sensor."""
 
     def __init__(self, coordinator: PowerMaxCoordinator, entry: ConfigEntry):
         """Initialize."""
-        super().__init__()
+        super().__init__(entry)
         self._coordinator = coordinator
         self._entry = entry
         self._source_sensor = entry.data[CONF_SOURCE_SENSOR]
-        self._binary_sensor = entry.data.get(CONF_BINARY_SENSOR)
         self._attr_name = f"Power Max Source {self._source_sensor.split('.')[-1]}"
         self._attr_unique_id = f"{entry.entry_id}_source"
         self._attr_device_class = SensorDeviceClass.POWER
@@ -135,31 +149,23 @@ class SourcePowerSensor(SensorEntity):
             )
         )
 
-    def _can_update(self):
-        """Check if the sensor can update based on binary sensor state."""
-        if not self._binary_sensor:
-            return True
-        state = self.hass.states.get(self._binary_sensor)
-        return state is not None and state.state == "on"
-
     @property
     def native_value(self):
         """Return the state."""
         return self._state
 
 
-class HourlyEnergySensor(SensorEntity):
-    """Sensor for hourly average kWh so far the current hour."""
+class HourlyAveragePowerSensor(GatedSensorEntity):
+    """Sensor for hourly average power in kW so far the current hour."""
 
     def __init__(self, coordinator: PowerMaxCoordinator, entry: ConfigEntry):
         """Initialize."""
-        super().__init__()
+        super().__init__(entry)
         self._coordinator = coordinator
         self._entry = entry
         self._source_sensor = entry.data[CONF_SOURCE_SENSOR]
-        self._binary_sensor = entry.data.get(CONF_BINARY_SENSOR)
         self._attr_name = f"Hourly Average Power {self._source_sensor.split('.')[-1]}"
-        self._attr_unique_id = f"{entry.entry_id}_hourly_energy"
+        self._attr_unique_id = f"{entry.entry_id}_hourly_average_power"
         self._attr_device_class = SensorDeviceClass.POWER
         self._attr_native_unit_of_measurement = UnitOfPower.KILO_WATT
         self._attr_state_class = SensorStateClass.MEASUREMENT
@@ -235,13 +241,6 @@ class HourlyEnergySensor(SensorEntity):
                 self.hass, sensors, _async_state_changed
             )
         )
-
-    def _can_update(self):
-        """Check if the sensor can update based on binary sensor state."""
-        if not self._binary_sensor:
-            return True
-        state = self.hass.states.get(self._binary_sensor)
-        return state is not None and state.state == "on"
 
     @property
     def native_value(self):
