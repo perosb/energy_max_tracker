@@ -1,13 +1,14 @@
 # Power Max Tracker Integration for Home Assistant
 
-The **Power Max Tracker** integration for Home Assistant tracks the maximum hourly average power values from a specified power sensor, with optional gating by a binary sensor. It creates sensors to display the top power values in kilowatts (kW) and a source sensor that mirrors the input sensor in watts (W), ignoring negative values and setting to `0` when the binary sensor is off.
+The **Power Max Tracker** integration for Home Assistant tracks the maximum hourly average power values from a specified power sensor, with optional gating by a binary sensor. It creates sensors to display the top power values in kilowatts (kW), their average, a source sensor that mirrors the input sensor in watts (W), and an hourly average power sensor, all ignoring negative values and setting to `0` when the binary sensor is off.
 
 ## Features
-- **Max Power Sensors**: Creates `num_max_values` sensors (e.g., `sensor.max_power_1_<entry_id>`, `sensor.max_power_2_<entry_id>`) showing the top hourly average power values in kW, rounded to 2 decimal places.
+- **Max Power Sensors**: Creates `num_max_values` sensors (e.g., `sensor.max_hourly_average_power_1_<entry_id>`, `sensor.max_hourly_average_power_2_<entry_id>`) showing the top hourly average power values in kW, rounded to 2 decimal places.
+- **Average Max Power Sensor**: Creates a sensor (e.g., `sensor.average_max_hourly_average_power_<entry_id>`) showing the average of all max hourly average power values in kW.
 - **Source Power Sensor**: Creates a sensor (e.g., `sensor.power_max_source_<entry_id>`) that tracks the source sensor's state in watts, setting to `0` for negative values or when the binary sensor is off/unavailable.
-- **Current Hourly Energy Sensor**: Creates a sensor (e.g., `sensor.current_hourly_energy_<entry_id>`) that calculates cumulative kWh usage so far in the current hour based on the source sensor's power, gated by the binary sensor.
+- **Hourly Average Power Sensor**: Creates a sensor (e.g., `sensor.hourly_average_power_<entry_id>`) that calculates the average power in kW so far in the current hour based on the source sensor's power, gated by the binary sensor, with periodic updates to account for 0W periods.
 - **Hourly Updates**: Updates `max_values` at 1 minute past each hour using hourly average statistics from the source sensor.
-- **Negative Value Filtering**: Ignores negative power values in both the source sensor and max value calculations.
+- **Negative Value Filtering**: Ignores negative power values in all sensors.
 - **Binary Sensor Gating**: Only updates when the binary sensor (if configured) is `"on"`.
 - **Monthly Reset**: Optionally resets `max_values` to `0` on the 1st of each month.
 - **Multiple Config Entries**: Supports multiple source sensors with separate max value tracking.
@@ -47,11 +48,12 @@ power_max_tracker:
 
 ## Usage
 - **Entities Created**:
-  - `sensor.max_power_<index>_<entry_id>`: Top `num_max_values` hourly average power values in kW (e.g., `sensor.max_power_1_01K6ABFNPK61HBVAN855WBHXBG`).
+  - `sensor.max_hourly_average_power_<index>_<entry_id>`: Top `num_max_values` hourly average power values in kW (e.g., `sensor.max_hourly_average_power_1_01K6ABFNPK61HBVAN855WBHXBG`).
+  - `sensor.average_max_hourly_average_power_<entry_id>`: Average of all max hourly average power values in kW.
   - `sensor.power_max_source_<entry_id>`: Tracks the source sensor in watts, `0` if negative or binary sensor is off/unavailable.
-  - `sensor.current_hourly_energy_<entry_id>`: Cumulative kWh usage so far in the current hour.
+  - `sensor.hourly_average_power_<entry_id>`: Average power in kW so far in the current hour, with periodic updates for 0W periods.
 - **Service**: Call `power_max_tracker.update_max_values` via Developer Tools > Services to recalculate max values from midnight.
-- **Updates**: Max sensors update at 1 minute past each hour or after calling the service. The source and energy sensors update in real-time when the binary sensor is `"on"`.
+- **Updates**: Max sensors update at 1 minute past each hour or after calling the service. The source and hourly average sensors update in real-time when the binary sensor is `"on"`, with additional periodic updates for the hourly average sensor.
 
 ## Important Notes
 - **Renaming Source Sensor**: If the `source_sensor` is renamed (e.g., from `sensor.power_sensor` to `sensor.new_power_sensor`), the integration will stop tracking it. Update the configuration with the new entity ID and restart Home Assistant to restore functionality.
