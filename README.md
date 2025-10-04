@@ -1,3 +1,5 @@
+[![power_max_tracker](https://img.shields.io/github/release/perosb/power_max_tracker/all.svg?label=current%20release)](https://github.com/perosb/power_max_tracker) [![downloads](https://img.shields.io/github/downloads/perosb/power_max_tracker/total?label=downloads)](https://github.com/perosb/power_max_tracker)
+
 # Power Max Tracker Integration for Home Assistant
 
 The **Power Max Tracker** integration for Home Assistant tracks the maximum hourly average power values from a specified power sensor, with optional gating by a binary sensor. It creates sensors to display the top power values in kilowatts (kW), their average, a source sensor that mirrors the input sensor in watts (W), and an hourly average power sensor, all ignoring negative values and setting to `0` when the binary sensor is off.
